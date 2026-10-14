@@ -81,7 +81,7 @@ expires.
 ## Contributing
 
 1. Fork the repository and create a feature branch.
-2. Run `mise install` to install the pinned development tools.
+2. Run `mise install` to install your configured development tools.
 3. Follow the repository standards in `AGENTS.md`.
 4. Run the same checks as CI:
 
