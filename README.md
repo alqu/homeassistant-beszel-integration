@@ -80,6 +80,9 @@ expires.
 
 ## Contributing
 
+Install the [shared Mise configuration](https://github.com/maxexcloo/dotfiles#shared-tools--tasks)
+before running local Mise tasks.
+
 1. Fork the repository and create a feature branch.
 2. Run `mise install` to install your configured development tools.
 3. Follow the repository standards in `AGENTS.md`.
