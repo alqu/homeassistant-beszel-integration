@@ -94,9 +94,10 @@ before running local Mise tasks.
 
 5. Submit a pull request with tests and documentation for behavioural changes.
 
-Unit tests use lightweight Home Assistant and PocketBase test doubles. GitHub CI
-also runs HACS and Hassfest validation; the unit tests do not exercise a running
-Home Assistant instance or Beszel Hub.
+Run `mise run test:python` to run tests separately. The test task uses uv to
+provision an isolated Python 3.14 environment with Home Assistant and its
+custom-component pytest fixtures. External API calls remain mocked. GitHub CI
+also runs HACS and Hassfest validation.
 
 ## Licence
 

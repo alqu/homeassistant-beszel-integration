@@ -1,95 +1,97 @@
 """Tests for the Beszel config flow."""
 
-import unittest
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-from support import (
-    CONF_HOST,
-    CONF_PASSWORD,
-    CONF_USERNAME,
-    FakeHomeAssistant,
-    FlowResultType,
-)
+from homeassistant.config_entries import SOURCE_REAUTH, SOURCE_USER
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.data_entry_flow import FlowResultType
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beszel.api import BeszelApiAuthError
-from custom_components.beszel.config_flow import BeszelConfigFlow
+from custom_components.beszel.const import DOMAIN
 
 
-class BeszelConfigFlowTests(unittest.IsolatedAsyncioTestCase):
-    """Exercise the Beszel config flow."""
-
-    async def test_user_flow_normalises_host(self):
-        """The user flow stores lower-case keys and a normalised host."""
-        with patch("custom_components.beszel.config_flow.BeszelApiClient") as api_class:
-            api_class.return_value.async_authenticate = AsyncMock()
-            api_class.return_value.host = "http://beszel.local"
-            flow = BeszelConfigFlow()
-            flow.hass = FakeHomeAssistant()
-            result = await flow.async_step_user(
-                {
-                    CONF_HOST: "beszel.local/",
-                    CONF_USERNAME: "user",
-                    CONF_PASSWORD: "password",
-                }
-            )
-
-        self.assertIs(result["type"], FlowResultType.CREATE_ENTRY)
-        self.assertEqual(
-            result["data"],
-            {
-                CONF_HOST: "http://beszel.local",
-                CONF_PASSWORD: "password",
-                CONF_USERNAME: "user",
-            },
-        )
-        self.assertEqual(result["result"].unique_id, "http://beszel.local_user")
-
-    async def test_user_flow_reports_invalid_authentication(self):
-        """Invalid credentials return the translated authentication error."""
-        with patch("custom_components.beszel.config_flow.BeszelApiClient") as api_class:
-            api_class.return_value.async_authenticate = AsyncMock(
-                side_effect=BeszelApiAuthError("invalid credentials")
-            )
-            flow = BeszelConfigFlow()
-            flow.hass = FakeHomeAssistant()
-            result = await flow.async_step_user(
-                {
-                    CONF_HOST: "beszel.local",
-                    CONF_PASSWORD: "wrong",
-                    CONF_USERNAME: "user",
-                }
-            )
-
-        self.assertIs(result["type"], FlowResultType.FORM)
-        self.assertEqual(result["errors"], {"base": "invalid_auth"})
-
-    async def test_reauthentication_updates_only_the_password(self):
-        """Reauthentication retains the configured Hub and username."""
-        entry = SimpleNamespace(
+async def test_user_flow_normalises_host(hass):
+    """The user flow stores lower-case keys and a normalised host."""
+    with (
+        patch("custom_components.beszel.config_flow.BeszelApiClient") as api_class,
+        patch("custom_components.beszel.async_setup_entry", return_value=True),
+    ):
+        api_class.return_value.async_authenticate = AsyncMock()
+        api_class.return_value.host = "http://beszel.local"
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_USER},
             data={
-                CONF_HOST: "http://beszel.local",
-                CONF_PASSWORD: "old",
+                CONF_HOST: "beszel.local/",
                 CONF_USERNAME: "user",
-            }
+                CONF_PASSWORD: "password",
+            },
         )
-        with patch("custom_components.beszel.config_flow.BeszelApiClient") as api_class:
-            api_class.return_value.async_authenticate = AsyncMock()
-            flow = BeszelConfigFlow()
-            flow._get_reauth_entry = MagicMock(return_value=entry)
-            flow.async_update_reload_and_abort = MagicMock(
-                return_value={"type": "abort"}
-            )
-            result = await flow.async_step_reauth_confirm(
-                {CONF_PASSWORD: "new-password"}
-            )
+        await hass.async_block_till_done()
 
-        self.assertEqual(result, {"type": "abort"})
-        self.assertEqual(
-            flow.async_update_reload_and_abort.call_args.kwargs["data"],
-            {
-                CONF_HOST: "http://beszel.local",
-                CONF_PASSWORD: "new-password",
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {
+        CONF_HOST: "http://beszel.local",
+        CONF_PASSWORD: "password",
+        CONF_USERNAME: "user",
+    }
+    assert result["result"].unique_id == "http://beszel.local_user"
+
+
+async def test_user_flow_reports_invalid_authentication(hass):
+    """Invalid credentials return the translated authentication error."""
+    with patch("custom_components.beszel.config_flow.BeszelApiClient") as api_class:
+        api_class.return_value.async_authenticate = AsyncMock(
+            side_effect=BeszelApiAuthError("invalid credentials")
+        )
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_USER},
+            data={
+                CONF_HOST: "beszel.local",
+                CONF_PASSWORD: "wrong",
                 CONF_USERNAME: "user",
             },
         )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_auth"}
+
+
+async def test_reauthentication_updates_only_the_password(hass):
+    """Reauthentication retains the configured Hub and username."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_HOST: "http://beszel.local",
+            CONF_PASSWORD: "old",
+            CONF_USERNAME: "user",
+        },
+        unique_id="http://beszel.local_user",
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"entry_id": entry.entry_id, "source": SOURCE_REAUTH},
+        data=entry.data,
+    )
+    assert result["step_id"] == "reauth_confirm"
+    with (
+        patch("custom_components.beszel.config_flow.BeszelApiClient") as api_class,
+        patch.object(hass.config_entries, "async_reload", return_value=True) as reload,
+    ):
+        api_class.return_value.async_authenticate = AsyncMock()
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_PASSWORD: "new-password"}
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
+    assert entry.data == {
+        CONF_HOST: "http://beszel.local",
+        CONF_PASSWORD: "new-password",
+        CONF_USERNAME: "user",
+    }
+    reload.assert_awaited_once_with(entry.entry_id)

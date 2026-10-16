@@ -4,7 +4,6 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import support  # noqa: F401
 from pocketbase.utils import ClientResponseError
 
 from custom_components.beszel.api import BeszelApiAuthError, BeszelApiClient
