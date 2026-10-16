@@ -209,6 +209,13 @@ class TestBeszelSensor:
             identifiers={(DOMAIN, "entry_system")},
             name="Old Name",
         )
+        other_entry = MockConfigEntry(domain=DOMAIN)
+        other_entry.add_to_hass(hass)
+        other_device = dr.async_get(hass).async_get_or_create(
+            config_entry_id=other_entry.entry_id,
+            identifiers={(DOMAIN, "entry_system")},
+            name="Other Hub",
+        )
         coordinator.data["system"].update(
             {"name": "New Name", "info": {"os": 0, "v": "1.2.3"}}
         )
@@ -218,3 +225,4 @@ class TestBeszelSensor:
         assert device.model == "Linux"
         assert device.name == "New Name"
         assert device.sw_version == "1.2.3"
+        assert dr.async_get(hass).async_get(other_device.id).name == "Other Hub"

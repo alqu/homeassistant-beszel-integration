@@ -762,8 +762,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     def update_registered_devices():
         for system_id, raw_system_data in (coordinator.data or {}).items():
-            device = device_registry.async_get_device(
-                identifiers={(DOMAIN, f"{entry.entry_id}_{system_id}")}
+            device = device_registry.async_get_device_by_identifier(
+                (DOMAIN, f"{entry.entry_id}_{system_id}"), entry.entry_id
             )
             if device is None:
                 continue
