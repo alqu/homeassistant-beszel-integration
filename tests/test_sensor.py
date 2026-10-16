@@ -73,6 +73,34 @@ class BeszelSensorTests(unittest.IsolatedAsyncioTestCase):
             {"beszel_entry_system_status_status"},
         )
 
+    def test_nested_sensors_keep_ids_metadata_and_live_values(self):
+        """Filesystem and GPU discovery retain their distinct data and names."""
+        coordinator = MagicMock()
+        coordinator.config_entry_id = "entry"
+        stats = {
+            "efs": {"data": {"d": 100, "du": 40}},
+            "g": {"0": {"n": "Graphics", "u": 25}, "1": {"u": 0}},
+        }
+        coordinator.data = {"system": {"stats": stats}}
+        sensors = _create_available_sensors(coordinator)
+        by_id = {sensor.unique_id: sensor for sensor in sensors}
+        filesystem = by_id["beszel_entry_system_stats_efs_data_d"]
+        gpu = by_id["beszel_entry_system_stats_g_0_u"]
+        fallback_gpu = by_id["beszel_entry_system_stats_g_1_u"]
+
+        self.assertEqual(filesystem.native_value, 100)
+        self.assertEqual(filesystem.translation_placeholders, {"filesystem": "data"})
+        self.assertEqual(gpu.native_value, 25)
+        self.assertEqual(gpu.translation_placeholders, {"gpu": "Graphics"})
+        self.assertEqual(gpu.translation_key, "gpu_usage")
+        self.assertEqual(gpu.native_unit_of_measurement, "%")
+        self.assertEqual(fallback_gpu.native_value, 0)
+        self.assertEqual(fallback_gpu.translation_placeholders, {"gpu": "1"})
+
+        stats["g"]["0"]["u"] = None
+        self.assertIsNone(gpu.native_value)
+        self.assertEqual(_create_available_sensors(coordinator, set(by_id)), [])
+
     def test_data_rates_read_byte_counters(self):
         """Byte counters are converted to megabytes per second."""
         coordinator = MagicMock()

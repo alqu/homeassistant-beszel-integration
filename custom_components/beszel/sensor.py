@@ -690,66 +690,43 @@ def _create_available_sensors(coordinator, known_unique_ids=None):
                 entities.append(BeszelSensor(coordinator, system_id, description))
 
         stats = _mapping(system_data.get("stats"))
-        extra_filesystems = _mapping(stats.get(ATTR_EXTRA_FS))
-        for filesystem_name in sorted(extra_filesystems, key=str):
-            for description in EXTRA_FS_SENSOR_DESCRIPTIONS:
-                unique_id = _nested_unique_id(
-                    coordinator,
-                    system_id,
-                    ATTR_EXTRA_FS,
-                    filesystem_name,
-                    description.api_key,
+        for parent_key, descriptions, placeholder in (
+            (ATTR_EXTRA_FS, EXTRA_FS_SENSOR_DESCRIPTIONS, "filesystem"),
+            (ATTR_GPU_DATA, GPU_SENSOR_DESCRIPTIONS, "gpu"),
+        ):
+            items = _mapping(stats.get(parent_key))
+            for item_key in sorted(items, key=str):
+                item = _mapping(items.get(item_key))
+                item_name = (
+                    item.get(ATTR_GPU_NAME) or item_key
+                    if parent_key == ATTR_GPU_DATA
+                    else item_key
                 )
-                if unique_id in known_unique_ids:
-                    continue
-                if (
-                    _nested_value(
-                        system_data,
-                        ATTR_EXTRA_FS,
-                        filesystem_name,
-                        description,
+                for description in descriptions:
+                    unique_id = _nested_unique_id(
+                        coordinator,
+                        system_id,
+                        parent_key,
+                        item_key,
+                        description.api_key,
                     )
-                    is None
-                ):
-                    continue
-                sensor = BeszelNestedSensor(
-                    coordinator,
-                    system_id,
-                    ATTR_EXTRA_FS,
-                    filesystem_name,
-                    description,
-                    {"filesystem": str(filesystem_name)},
-                )
-                entities.append(sensor)
-
-        gpu_data = _mapping(stats.get(ATTR_GPU_DATA))
-        for gpu_id in sorted(gpu_data, key=str):
-            gpu_stats = _mapping(gpu_data.get(gpu_id))
-            gpu_name = gpu_stats.get(ATTR_GPU_NAME) or gpu_id
-            for description in GPU_SENSOR_DESCRIPTIONS:
-                unique_id = _nested_unique_id(
-                    coordinator,
-                    system_id,
-                    ATTR_GPU_DATA,
-                    gpu_id,
-                    description.api_key,
-                )
-                if unique_id in known_unique_ids:
-                    continue
-                if (
-                    _nested_value(system_data, ATTR_GPU_DATA, gpu_id, description)
-                    is None
-                ):
-                    continue
-                sensor = BeszelNestedSensor(
-                    coordinator,
-                    system_id,
-                    ATTR_GPU_DATA,
-                    gpu_id,
-                    description,
-                    {"gpu": str(gpu_name)},
-                )
-                entities.append(sensor)
+                    if unique_id in known_unique_ids:
+                        continue
+                    if (
+                        _nested_value(system_data, parent_key, item_key, description)
+                        is None
+                    ):
+                        continue
+                    entities.append(
+                        BeszelNestedSensor(
+                            coordinator,
+                            system_id,
+                            parent_key,
+                            item_key,
+                            description,
+                            {placeholder: str(item_name)},
+                        )
+                    )
 
         temperatures = _mapping(stats.get(ATTR_TEMPERATURES))
         for temperature_name in sorted(temperatures, key=str):
@@ -816,10 +793,16 @@ class BeszelCoordinatorSensor(CoordinatorEntity, SensorEntity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator, system_id):
+    def __init__(self, coordinator, system_id, description):
         """Initialise the system sensor."""
         super().__init__(coordinator)
         self._system_id = system_id
+        self._description = description
+        self._attr_device_class = description.device_class
+        self._attr_icon = description.icon
+        self._attr_native_unit_of_measurement = description.native_unit
+        self._attr_state_class = description.state_class
+        self._attr_translation_key = description.translation_key
 
     @property
     def system_data(self):
@@ -866,15 +849,9 @@ class BeszelNestedSensor(BeszelCoordinatorSensor):
         translation_placeholders,
     ):
         """Initialise the nested sensor."""
-        super().__init__(coordinator, system_id)
-        self._description = description
+        super().__init__(coordinator, system_id, description)
         self._item_key = item_key
         self._parent_key = parent_key
-        self._attr_device_class = description.device_class
-        self._attr_icon = description.icon
-        self._attr_native_unit_of_measurement = description.native_unit
-        self._attr_state_class = description.state_class
-        self._attr_translation_key = description.translation_key
         self._attr_translation_placeholders = translation_placeholders
         self._attr_unique_id = _nested_unique_id(
             coordinator,
@@ -900,14 +877,8 @@ class BeszelSensor(BeszelCoordinatorSensor):
 
     def __init__(self, coordinator, system_id, description):
         """Initialise the sensor."""
-        super().__init__(coordinator, system_id)
-        self._description = description
-        self._attr_device_class = description.device_class
-        self._attr_icon = description.icon
-        self._attr_native_unit_of_measurement = description.native_unit
+        super().__init__(coordinator, system_id, description)
         self._attr_options = list(description.options) if description.options else None
-        self._attr_state_class = description.state_class
-        self._attr_translation_key = description.translation_key
         self._attr_unique_id = _standard_unique_id(coordinator, system_id, description)
 
     @property
