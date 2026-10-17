@@ -23,7 +23,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 class BeszelConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Beszel."""
 
-    VERSION = 2
+    VERSION = 3
 
     async def _async_validate_input(self, user_input):
         """Validate Beszel connection details."""

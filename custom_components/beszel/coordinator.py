@@ -57,7 +57,6 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
         )
         self.api_client = api_client
         self.config_entry_id = config_entry_id
-        self.systems_list = []
 
     async def _async_update_data(self):
         """Fetch data from API endpoint."""
@@ -66,7 +65,6 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             if not isinstance(systems, list):
                 raise TypeError("Beszel Hub returned an invalid systems response")
 
-            self.systems_list = systems
             if not systems:
                 _LOGGER.info("No systems found on Beszel Hub %s", self.api_client.host)
                 return {}

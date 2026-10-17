@@ -92,7 +92,7 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
             client = BeszelApiClient("beszel.local", "user", "password")
-            client._ensure_auth = AsyncMock()
+            client.async_authenticate = AsyncMock()
             result = await client.async_get_latest_system_stats("system")
 
         self.assertIsNone(result)
@@ -106,7 +106,7 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
             client = BeszelApiClient("beszel.local", "user", "password")
-            client._ensure_auth = AsyncMock()
+            client.async_authenticate = AsyncMock()
             client._is_authenticated = True
             with self.assertRaises(BeszelApiAuthError):
                 await client.async_get_latest_system_stats("system")
@@ -127,7 +127,7 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
             client = BeszelApiClient("beszel.local", "user", "password")
-            client._ensure_auth = AsyncMock()
+            client.async_authenticate = AsyncMock()
             result = await client.async_get_system_details()
 
         self.assertEqual(set(result), {"one", "two"})
@@ -142,7 +142,28 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
             client = BeszelApiClient("beszel.local", "user", "password")
-            client._ensure_auth = AsyncMock()
+            client.async_authenticate = AsyncMock()
             result = await client.async_get_system_details()
 
         self.assertEqual(result, {})
+
+    async def test_statistics_requests_reuse_valid_authentication(self):
+        """Request methods authenticate once and reuse a still-valid session."""
+        authentication = MagicMock()
+        statistics = MagicMock()
+        statistics.get_list.return_value = SimpleNamespace(items=[])
+        pocketbase = MagicMock()
+        pocketbase.collection.side_effect = {
+            "_superusers": authentication,
+            "system_stats": statistics,
+        }.__getitem__
+        with (
+            patch("custom_components.beszel.api.PocketBase", return_value=pocketbase),
+            patch("custom_components.beszel.api.validate_token", return_value=True),
+        ):
+            client = BeszelApiClient("beszel.local", "user", "password")
+            assert await client.async_get_latest_system_stats("system") is None
+            assert await client.async_get_latest_system_stats("system") is None
+
+        authentication.auth_with_password.assert_called_once_with("user", "password")
+        assert statistics.get_list.call_count == 2

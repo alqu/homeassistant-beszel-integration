@@ -226,3 +226,24 @@ class TestBeszelSensor:
         assert device.name == "New Name"
         assert device.sw_version == "1.2.3"
         assert dr.async_get(hass).async_get(other_device.id).name == "Other Hub"
+
+
+def test_missing_operating_system_is_none():
+    """An existing OS sensor exposes missing and unrecognised values as None."""
+    coordinator = MagicMock()
+    coordinator.config_entry_id = "entry"
+    coordinator.data = {"system": {"info": {"os": 0}}}
+    sensor = next(
+        sensor
+        for sensor in _create_available_sensors(coordinator)
+        if sensor.unique_id.endswith("_info_os")
+    )
+    assert sensor.native_value == "Linux"
+    for info in ({}, {"os": None}, {"os": 99}):
+        coordinator.data["system"]["info"] = info
+        assert sensor.native_value is None
+        assert "model" not in sensor.device_info
+        assert not any(
+            sensor.unique_id.endswith("_info_os")
+            for sensor in _create_available_sensors(coordinator)
+        )

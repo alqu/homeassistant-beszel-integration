@@ -29,16 +29,6 @@ class BeszelApiClient:
         """Return the normalised Beszel Hub URL."""
         return self._host
 
-    async def _ensure_auth(self):
-        """Ensure the client is authenticated before making a request."""
-        if not (
-            self._is_authenticated
-            and self._client.auth_store.token
-            and self._client.auth_store.model
-            and validate_token(self._client.auth_store.token)
-        ):
-            await self.async_authenticate()
-
     async def async_authenticate(self):
         """Authenticate with the Beszel Hub."""
         if (
@@ -69,7 +59,7 @@ class BeszelApiClient:
 
     async def async_get_latest_system_stats(self, system_id):
         """Fetch the latest stats for a specific system."""
-        await self._ensure_auth()
+        await self.async_authenticate()
         try:
             result = await asyncio.to_thread(
                 self._client.collection("system_stats").get_list,
@@ -93,7 +83,7 @@ class BeszelApiClient:
 
     async def async_get_system_details(self):
         """Fetch static system details keyed by system ID."""
-        await self._ensure_auth()
+        await self.async_authenticate()
         try:
             records = await asyncio.to_thread(
                 self._client.collection("system_details").get_full_list,
@@ -117,7 +107,7 @@ class BeszelApiClient:
 
     async def async_get_systems(self):
         """Fetch all systems from the Beszel Hub."""
-        await self._ensure_auth()
+        await self.async_authenticate()
         try:
             records = await asyncio.to_thread(
                 self._client.collection("systems").get_full_list,

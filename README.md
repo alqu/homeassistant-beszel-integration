@@ -28,7 +28,7 @@ Requires Home Assistant 2026.9.4 or newer.
 - GPU memory, package power, power draw, and utilisation.
 - Memory, swap, network, operating system, status, and uptime sensors.
 - Multiple Beszel Hubs and systems without device or entity collisions.
-- Per-filesystem and temperature sensors.
+- Per-filesystem and temperature sensors with distinct identifiers for each metric.
 - Reauthentication and reconfiguration through Home Assistant.
 - Temporary connection failures and rate limits retry without prompting for credentials.
 - Translated entity names and enum states.
@@ -65,6 +65,8 @@ Enter the following values when adding the integration:
 - **Password**: The Hub password.
 
 Home Assistant creates sensors only when Beszel reports the corresponding data.
+Existing temperature entities are migrated automatically, preserving their entity
+IDs and customisations.
 New systems and metrics are discovered during later updates without reloading the
 integration. Missing measurements remain unavailable rather than being reported as
 zero. If one system temporarily fails while the Hub remains reachable, its cached
