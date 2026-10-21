@@ -62,7 +62,15 @@ temperature entities are migrated automatically and keep their entity IDs and
 customisations. New systems and metrics are picked up during later updates
 without reloading the integration. Missing measurements show as unavailable, not
 zero. If one system briefly fails while the Hub is still reachable, its cached
-metrics stay until the next successful update.
+metrics stay cached. Measurement sensors are available only while the system is
+up and the latest one-minute statistics record is no more than five minutes old.
+Missing or invalid record timestamps make measurements unavailable; static
+information and the system status remain available.
+
+Capacity and throughput readings use decimal GB, MB and MB/s. Beszel's binary
+source quantities are converted to match those existing units. Entity and
+statistics IDs are unchanged; previously recorded values are not rewritten, so
+historical graphs retain the earlier unit error before this correction.
 
 To add more disks, configure the Beszel agent using the
 [additional disks guide](https://beszel.dev/guide/additional-disks). Each reported

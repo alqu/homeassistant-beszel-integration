@@ -142,12 +142,13 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
     async def _fetch_individual_system_data(self, system, details):
         """Fetch stats and 'info' for a single system."""
         system_id = system["id"]
-        stats = await self.api_client.async_get_latest_system_stats(system_id)
+        record = await self.api_client.async_get_latest_system_stats(system_id)
 
         return {
             "id": system_id,
             "name": system.get("name", system_id),
             "status": system.get("status", "unknown"),
             "info": _merge_system_info(system.get("info"), details),
-            "stats": stats,
+            "stats": record.get("stats") if record else None,
+            "stats_created": record.get("created") if record else None,
         }

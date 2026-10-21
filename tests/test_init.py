@@ -6,6 +6,7 @@ from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.const import EntityCategory
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beszel import (
@@ -99,7 +100,7 @@ async def test_temperature_identifier_migration_preserves_registry_entries(hass)
     assert registry.async_get(temperature.entity_id).unique_id == migrated.unique_id
 
 
-async def test_integration_setup_update_and_unload(hass):
+async def test_integration_setup_update_and_unload(hass, freezer):
     """Register real entities, discover updates and remove every listener on unload."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -137,11 +138,14 @@ async def test_integration_setup_update_and_unload(hass):
         api.async_get_system_details = AsyncMock(return_value={})
         api.async_get_latest_system_stats = AsyncMock(
             return_value={
-                "bat": [80, 3],
-                "cpu": 12.5,
-                "efs": {"data": {"d": 100}},
-                "g": {"0": {"n": "Graphics", "u": 25}},
-                "t": {"cpu": 45, "cpu_thermal": 46},
+                "created": dt_util.utcnow().isoformat(),
+                "stats": {
+                    "bat": [80, 3],
+                    "cpu": 12.5,
+                    "efs": {"data": {"d": 100}},
+                    "g": {"0": {"n": "Graphics", "u": 25}},
+                    "t": {"cpu": 45, "cpu_thermal": 46},
+                },
             }
         )
         assert await hass.config_entries.async_setup(entry.entry_id)
@@ -165,7 +169,7 @@ async def test_integration_setup_update_and_unload(hass):
         assert state("temperature_cpu").attributes["device_class"] == "temperature"
         assert state("temperature_cpu_thermal").state == "46.0"
         assert state("stats_battery_state").state == "charging"
-        assert state("stats_efs_data_d").state == "100"
+        assert state("stats_efs_data_d").state == "107.37"
         assert state("stats_g_0_u").state == "25.0"
         assert state("info_os").state == "Linux"
         assert state("info_u").state == "90"
@@ -177,10 +181,13 @@ async def test_integration_setup_update_and_unload(hass):
         assert "state_class" not in state("info_u").attributes
 
         api.async_get_systems.return_value[0]["info"] = {}
-        api.async_get_latest_system_stats.return_value = {"nr": 1.5, "t": {"cpu": 47}}
+        api.async_get_latest_system_stats.return_value = {
+            "stats": {"nr": 1.5, "t": {"cpu": 47}},
+            "created": dt_util.utcnow().isoformat(),
+        }
         await coordinator.async_refresh()
         await hass.async_block_till_done()
-        assert state("stats_nr").state == "1.5"
+        assert state("stats_nr").state == "1.57"
         assert state("temperature_cpu").state == "47.0"
         assert state("stats_cpu").state == "unknown"
         assert state("info_os").state == "unknown"
@@ -197,11 +204,23 @@ async def test_integration_setup_update_and_unload(hass):
         assert not await async_remove_config_entry_device(hass, entry, reported)
         assert await async_remove_config_entry_device(hass, entry, removed)
 
-        api.async_get_systems.return_value[0]["status"] = "down"
         api.async_get_latest_system_stats.side_effect = RuntimeError("stats failed")
         await coordinator.async_refresh()
         await hass.async_block_till_done()
-        assert state("stats_nr").state == "1.5"
+        assert state("stats_nr").state == "1.57"
+        cached = coordinator.data["system"]["stats"]
+        freezer.tick(301)
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert state("stats_nr").state == "unavailable"
+        assert coordinator.data["system"]["stats"] == cached
+        assert state("info_u").state == "unknown"
+        assert state("status_status").state == "up"
+
+        api.async_get_systems.return_value[0]["status"] = "down"
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert state("stats_nr").state == "unavailable"
         assert state("status_status").state == "down"
 
         assert await hass.config_entries.async_unload(entry.entry_id)

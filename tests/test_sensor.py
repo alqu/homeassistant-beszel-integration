@@ -1,11 +1,13 @@
 """Tests for Beszel sensors."""
 
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 from homeassistant.components.sensor import SensorDeviceClass
-from homeassistant.const import UnitOfTime
+from homeassistant.const import UnitOfInformation, UnitOfTime
 from homeassistant.helpers import device_registry as dr
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beszel.const import DOMAIN
@@ -15,13 +17,69 @@ from custom_components.beszel.sensor import _create_available_sensors, async_set
 class TestBeszelSensor:
     """Exercise Beszel sensor discovery behaviour."""
 
+    def test_binary_capacities_match_existing_decimal_units_and_keep_ids(self):
+        """Correct capacities without changing recorder identities or missing data."""
+        coordinator = MagicMock()
+        coordinator.config_entry.entry_id = "entry"
+        stats = {"m": 1, "efs": {"data": {"d": 1}}, "g": {"0": {"mt": 1}}}
+        coordinator.data = {"system": {"stats": stats}}
+        by_id = {
+            sensor.unique_id: sensor
+            for sensor in _create_available_sensors(coordinator)
+        }
+        for suffix in ["m", "efs_data_d"]:
+            sensor = by_id["beszel_entry_system_stats_" + suffix]
+            assert sensor.native_value == 1.07
+            assert sensor.native_unit_of_measurement == UnitOfInformation.GIGABYTES
+        gpu = by_id["beszel_entry_system_stats_g_0_mt"]
+        assert gpu.native_value == 1.05
+        assert gpu.native_unit_of_measurement == UnitOfInformation.MEGABYTES
+        stats["m"] = None
+        stats["g"]["0"]["mt"] = None
+        assert by_id["beszel_entry_system_stats_m"].native_value is None
+        assert gpu.native_value is None
+
+    @pytest.mark.parametrize(
+        "status, age, expected",
+        [
+            ("up", 0, True),
+            ("up", 300, True),
+            ("up", 301, False),
+            ("down", 0, False),
+            ("up", -1, False),
+            ("up", None, False),
+            ("up", "invalid", False),
+        ],
+    )
+    def test_statistics_availability_uses_native_source_age(
+        self, status, age, expected
+    ):
+        """Only fresh samples from online systems are available."""
+        now = dt_util.utcnow()
+        created = (
+            (now - timedelta(seconds=age)).isoformat() if isinstance(age, int) else age
+        )
+        coordinator = MagicMock()
+        coordinator.config_entry.entry_id = "entry"
+        coordinator.data = {
+            "system": {"status": status, "stats_created": created, "stats": {"cpu": 10}}
+        }
+        sensor = next(
+            sensor
+            for sensor in _create_available_sensors(coordinator)
+            if sensor.unique_id.endswith("_stats_cpu")
+        )
+        with patch("custom_components.beszel.sensor.dt_util.utcnow", return_value=now):
+            assert sensor.available is expected
+        assert sensor.native_value == 10
+
     @pytest.mark.parametrize(
         ("metrics", "expected"),
         [
-            ({"rb": 1048576, "wb": 524288}, (1, 0.5)),
+            ({"rb": 1048576, "wb": 524288}, (1.05, 0.52)),
             ({"rb": 0, "wb": 0, "r": 1, "w": 2}, (0, 0)),
-            ({"r": 1.5, "w": 2.5}, (1.5, 2.5)),
-            ({"rb": None, "wb": "invalid", "r": 1, "w": 2}, (1, 2)),
+            ({"r": 1.5, "w": 2.5}, (1.57, 2.62)),
+            ({"rb": None, "wb": "invalid", "r": 1, "w": 2}, (1.05, 2.1)),
         ],
     )
     def test_filesystem_rates_support_current_and_legacy_hubs(self, metrics, expected):
@@ -110,7 +168,7 @@ class TestBeszelSensor:
         filesystem = by_id["beszel_entry_system_stats_efs_data_d"]
         gpu = by_id["beszel_entry_system_stats_g_0_u"]
         fallback_gpu = by_id["beszel_entry_system_stats_g_1_u"]
-        assert filesystem.native_value == 100
+        assert filesystem.native_value == 107.37
         assert filesystem.translation_placeholders == {"filesystem": "data"}
         assert gpu.native_value == 25
         assert gpu.translation_placeholders == {"gpu": "Graphics"}
@@ -137,10 +195,10 @@ class TestBeszelSensor:
         }
         sensors = _create_available_sensors(coordinator)
         by_id = {sensor.unique_id: sensor for sensor in sensors}
-        assert by_id["beszel_entry_system_stats_ns"].native_value == 2.0
-        assert by_id["beszel_entry_system_stats_nr"].native_value == 1.0
-        assert by_id["beszel_entry_system_stats_dr"].native_value == 0.5
-        assert by_id["beszel_entry_system_stats_dw"].native_value == 0.25
+        assert by_id["beszel_entry_system_stats_ns"].native_value == 2.1
+        assert by_id["beszel_entry_system_stats_nr"].native_value == 1.05
+        assert by_id["beszel_entry_system_stats_dr"].native_value == 0.52
+        assert by_id["beszel_entry_system_stats_dw"].native_value == 0.26
 
     def test_data_rates_fall_back_to_legacy_values(self):
         """Legacy MB/s values are used when byte counters are absent."""
@@ -157,8 +215,8 @@ class TestBeszelSensor:
         }
         sensors = _create_available_sensors(coordinator)
         by_id = {sensor.unique_id: sensor for sensor in sensors}
-        assert by_id["beszel_entry_system_stats_ns"].native_value == 2.5
-        assert by_id["beszel_entry_system_stats_nr"].native_value == 1.5
+        assert by_id["beszel_entry_system_stats_ns"].native_value == 2.62
+        assert by_id["beszel_entry_system_stats_nr"].native_value == 1.57
 
     def test_new_metrics_are_discovered_on_later_data(self):
         """A later coordinator snapshot exposes newly reported metrics."""

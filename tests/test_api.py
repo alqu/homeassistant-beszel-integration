@@ -101,7 +101,9 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
         """Longer averaged records must not replace the latest live sample."""
         collection = MagicMock()
         collection.get_list.return_value = SimpleNamespace(
-            items=[SimpleNamespace(stats={"cpu": 12.5})]
+            items=[
+                SimpleNamespace(stats={"cpu": 12.5}, created="2026-10-22 01:00:00.000Z")
+            ]
         )
         pocketbase = MagicMock()
         pocketbase.collection.return_value = collection
@@ -111,7 +113,9 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
             client.async_authenticate = AsyncMock()
             result = await client.async_get_latest_system_stats("system")
 
-        self.assertEqual(result, {"cpu": 12.5})
+        self.assertEqual(
+            result, {"stats": {"cpu": 12.5}, "created": "2026-10-22 01:00:00.000Z"}
+        )
         pocketbase.collection.assert_called_once_with("system_stats")
         collection.get_list.assert_called_once_with(
             1,

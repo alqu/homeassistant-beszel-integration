@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -21,6 +22,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_AGENT_VERSION,
@@ -114,13 +116,13 @@ def _data_rate_megabytes(data, byte_key, index, legacy_key):
         )
     if value is not None:
         try:
-            return round(float(value) / (1024 * 1024), 2)
+            return round(float(value) / 1_000_000, 2)
         except TypeError, ValueError:
             pass
     legacy = data.get(legacy_key)
     if legacy is not None:
         try:
-            return round(float(legacy), 2)
+            return round(float(legacy) * 1024**2 / 1_000_000, 2)
         except TypeError, ValueError:
             return None
     return None
@@ -178,6 +180,20 @@ def _normalise_value(value, native_unit):
     if value is not None and native_unit == PERCENTAGE:
         try:
             return round(float(value), 2)
+        except TypeError, ValueError:
+            return None
+    if value is not None and native_unit in {
+        UnitOfInformation.GIGABYTES,
+        UnitOfInformation.MEGABYTES,
+    }:
+        # Beszel reports binary quantities; existing entity units remain decimal.
+        factor = (
+            1024**3 / 1_000_000_000
+            if native_unit == UnitOfInformation.GIGABYTES
+            else 1024**2 / 1_000_000
+        )
+        try:
+            return round(float(value) * factor, 2)
         except TypeError, ValueError:
             return None
     return value
@@ -728,6 +744,24 @@ class BeszelCoordinatorSensor(BeszelEntity, SensorEntity):
         """Initialise the system sensor."""
         super().__init__(coordinator, system_id)
         self.entity_description = description
+
+    @property
+    def available(self):
+        """Keep stale measurements unavailable while retaining their cached values."""
+        if not super().available:
+            return False
+        if self.entity_description.data_source != "stats":
+            return True
+        created = self.system_data.get("stats_created")
+        timestamp = (
+            dt_util.parse_datetime(created) if isinstance(created, str) else None
+        )
+        return (
+            str(self.system_data.get("status")).lower() == "up"
+            and timestamp is not None
+            and timestamp.tzinfo is not None
+            and timedelta(0) <= dt_util.utcnow() - timestamp <= timedelta(minutes=5)
+        )
 
 
 class BeszelNestedSensor(BeszelCoordinatorSensor):

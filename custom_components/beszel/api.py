@@ -76,7 +76,7 @@ class BeszelApiClient:
             ) from err
 
     async def async_get_latest_system_stats(self, system_id):
-        """Fetch the latest stats for a specific system."""
+        """Fetch the latest statistics record, including its source timestamp."""
         await self.async_authenticate()
         try:
             result = await asyncio.to_thread(
@@ -89,7 +89,7 @@ class BeszelApiClient:
                 },
             )
             if result.items:
-                return vars(result.items[0]).get("stats")
+                return vars(result.items[0])
             return None
         except ClientResponseError as err:
             self._raise_if_unauthorised(err)

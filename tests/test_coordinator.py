@@ -2,6 +2,7 @@
 
 import pytest
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beszel.api import BeszelApiAuthError
@@ -21,7 +22,7 @@ class FakeApiClient:
         """Return stats or fail for one system."""
         if system_id == "failed":
             raise RuntimeError("stats unavailable")
-        return {"cpu": 12.5}
+        return {"stats": {"cpu": 12.5}, "created": dt_util.utcnow().isoformat()}
 
     async def async_get_system_details(self):
         """Return no static system details by default."""
