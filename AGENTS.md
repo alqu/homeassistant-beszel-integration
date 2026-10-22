@@ -2,8 +2,6 @@
 
 ## Structure
 
-- Keep the integration in `custom_components/beszel/`.
-- Keep tests in `tests/`.
 - Keep user-visible strings in `translations/en.json`.
 - Group Beszel field constants by their source struct and sort each group alphabetically.
 
@@ -23,8 +21,3 @@
   Renovate raises them together.
 - Declare runtime requirements only in `manifest.json`; the test task installs them
   from there.
-
-## Changes
-
-- Cover behaviour changes with focused Home Assistant tests.
-- Update `README.md` when features or user-visible behaviour change.

@@ -88,20 +88,16 @@ Install the [shared Mise configuration](https://github.com/maxexcloo/dotfiles#sh
 before running local Mise tasks.
 
 1. Fork the repository and create a feature branch.
-2. Run `mise install` to install your configured development tools.
-3. Follow the repository standards in `AGENTS.md`.
-4. Run the same checks as CI:
+2. Follow the repository standards in `AGENTS.md`.
+3. Run the same checks as CI:
 
    ```bash
    mise run check
    ```
 
-5. Submit a pull request with tests and documentation for behavioural changes.
+4. Submit a pull request with tests and documentation for behavioural changes.
 
-Run `mise run test:python` to run just the tests. The test task uses uv to set up
-an isolated Python 3.14 environment with Home Assistant and its custom-component
-pytest fixtures. External API calls are mocked. GitHub CI also runs HACS and
-Hassfest validation.
+GitHub CI also runs HACS and Hassfest validation.
 
 ## Licence
 
