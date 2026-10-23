@@ -2,7 +2,6 @@
 
 ## Structure
 
-- Keep user-visible strings in `translations/en.json`.
 - Group Beszel field constants by their source struct and sort each group alphabetically.
 
 ## Behaviour
