@@ -144,9 +144,10 @@ class BeszelApiClient:
     async def async_get_network_monitors(self):
         """Fetch monitors, treating pre-0.20 Hubs as having no probes."""
         await self.async_authenticate()
+        client = await self._async_client()
         try:
             records = await asyncio.to_thread(
-                self._client.collection("network_monitors").get_full_list,
+                client.collection("network_monitors").get_full_list,
             )
             return [vars(record) for record in records]
         except ClientResponseError as err:
@@ -158,11 +159,12 @@ class BeszelApiClient:
     async def async_get_latest_network_monitor_stats(self, monitor_id):
         """Fetch the latest one-minute probe sample, including its timestamp."""
         await self.async_authenticate()
+        client = await self._async_client()
         try:
             # Beszel uses Unix milliseconds here. PocketBase Record decoding
             # assumes that `created` is a date string and cannot decode it.
             result = await asyncio.to_thread(
-                self._client.send,
+                client.send,
                 "/api/collections/network_monitor_stats/records",
                 {
                     "method": "GET",
